@@ -1,0 +1,268 @@
+---
+title: "Dplyr Training"
+author: "Timothy Banks"
+date: "26 April 2016"
+output: html_document
+---
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.  When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can take a look at this document as an example of Markdown.  You'll find Markdown is handy for documenting an analysis flow, as part of "reproducible analysis".
+
+We'll be taking a closer look at the dplyr package. Dplyr has the following fundamental commands:
+
+* item select rows: filter()
+* item select columns: select()
+* make new columns: mutate()
+* arrange row: arrange()
+* calculate summary statistics: summarize()
+* work on groups of data: group_by()
+* combined tables: left_join(), etc.
+
+Don't forget to use the cheatsheets we'll be supplying on these two packages.  They'll be helpful.
+
+### What is in our test data?
+
+We'll use the data frame _msleep_ from the ggplot2 package.  So, first we load ggplot2.  The head command is not so helpful as there are many columns, so we use the structure command to see what is in the frame.
+```{r echo=FALSE}
+require(ggplot2)
+```
+```{r}
+head(msleep)
+str(msleep)
+```
+
+### Calculating information
+
+Let's check what is the total day time per animal, adding "awake" and "sleep_total".  We'll use the pipe operator **%>%**.  It may look scary but it is a handy way to pipe information through different commands, from left to right.  Let's give this a go. Let's load dplyr.
+```{r}
+require("dplyr")
+msleep %>%  #take our data frame and pipe it to the mutate operator
+  mutate(total_day_time = awake + sleep_total) %>% #Long, so going to use head command
+    head
+```
+
+It is no surprise that things total to 24 (check the last column in the data frame).  If we want a more condensed view, we can use glimpse. Note the second pipe operator in use.  It allows us to chain commands.
+```{r}
+msleep %>%  #take our data frame and pipe it to the mutate operator
+  mutate(total_day_time = awake + sleep_total) %>% #and now pipe to glimpse
+    glimpse
+```
+### Using select()
+
+How to select just the columns we are interested in, rather than seeing all columns?  Let's say we just wanted the awake hours and total day time for each animal in _msleep_. Well, we just use the select function.
+```{r}
+msleep %>%  #take our data frame and pipe it to the mutate operator
+  mutate(total_day_time = awake + sleep_total) %>% #and now pipe to select
+    select(name, awake, total_day_time) %>% #Let's pipe to head to save space
+      head
+```
+The order is not so nice.  How can we arrange this?  You guessed it, with the arrange() function.
+
+###Using arrange()
+Let's arrange by animal name in alphabetic order.  Note the use of head to reduce the output.
+```{r}
+msleep %>%  #take our data frame and pipe it to the mutate operator
+  mutate(total_day_time = awake + sleep_total) %>% #and now pipe to select
+    select(name, awake, total_day_time) %>% #pipe to the command to arrange
+      arrange(name) %>% #save space using the head command
+        head
+```
+and in reverse order
+```{r}
+msleep %>%  #take our data frame and pipe it to the mutate operator
+  mutate(total_day_time = awake + sleep_total) %>% #and now pipe to select
+    select(name, awake, total_day_time) %>% 
+      arrange(desc(name)) %>% #Sort in the reverse order
+        head
+```
+
+###Using group_by()
+What is the median time awake for the different animal orders?  There are many commands to summarise data, which are listed in the cheat sheet.  These include:
+
+* first
+* last
+* min
+* max
+* mean
+* median
+* sd
+
+Here I am going to use the median function, create new column called med\_awake, and sort the frame by med\_awake in ascending order of this column.
+```{r}
+msleep %>%  #take our data frame and pipe it to group_by
+  group_by(order) %>%
+    summarize(med_awake = median(awake)) %>% #make a new column
+      arrange(med_awake)
+```
+Looks good!
+
+###Using filter()
+
+OK, we can select and build columns, but how do we select rows?  Let's see how many animals have awake hours greater than 12. To save space, let's just select the name and awake columns. To make the output easy to read, let's sort it by the awake column. In the interest of space, we'll use the head command to take the first few rows.  You might like to try running these 'queries' without it, so you can see all the output.
+```{r}
+msleep %>%
+  select(name, awake) %>%
+    filter(awake>12.) %>%
+      arrange(awake) %>%
+        head
+```
+
+Just what is a _potoroo_?
+```{r}
+msleep %>%
+  select(name, awake) %>%
+    filter(name == "Potoroo")
+```
+What about all rats?  Well, you can use a regular expression.  Regular expressions can be tricky, so we won't cover them here but it is good that you know that they exist.  You'll know what key words to use in later Google searches if you need to do something like the following!
+```{r}
+msleep %>%
+  select(name, awake) %>%
+    filter(grepl('rat',name))
+```
+Check the cheat sheet for the other handy commands:
+
+* distinct(): removes duplicate rows
+* sample_frac() randomly selects a fraction of the rows
+* sample_n() randomly selects a number n of rows
+* slice: select rows by position, e.g., slice(iris,10:15)
+
+And yes, you can have multiple conditions. Just be careful that they behave the way you expect.
+
+###Joins
+
+Well done, you have mastered the basics of dplyr commands.  You can select rows, select columns, calculate new columns, group rows together, and calculate summary statistics on groups.  You've also mastered the pipe operator.
+
+Let's take a quick look at joins, just for fun. We'll build two new tables from _msleep_, using two select commands.  Note the different way of using the select command.  Shouldn't be scary, it is just another way of doing the same thing we've seen above.
+
+```{r}
+order_table <- select(msleep, name, order)
+awake_table <- select(msleep, name, awake)
+#OK, let's look at these two tables a little
+glimpse(order_table)
+glimpse(awake_table)
+#And now let's join the two tables together by the name information
+left_join(order_table, awake_table) %>% head
+#Note how I used head? I could have put it as head(left_join...
+```
+
+Pretty cool.  The cheat sheet explains the different types of joins, and how to specify which column to join on.  You can also bind rows and columns, as well as use set operations.
+
+***
+
+#### More Joins
+
+OK, let's have some fun courtesy of the package's author, Hadley Wickham, who came up with the following example.  Let's create first two frames:
+```{r}
+x <- data.frame(
+    name = c("John","Paul","George", "Ringo", "Stuart", "Pete"),
+    instrument = c("guitar", "bass", "guitar", "drums", "bass", "drums"))
+y <- data.frame(
+    name = c("John", "Paul", "George", "Ringo", "Brian"),
+    band = c("TRUE", "TRUE", "TRUE", "TRUE", "FALSE"))
+```
+No guesses who we are talking about, right?
+
+##### Inner Join
+```{r}
+inner_join(x,y)
+```
+We've joined by name, the common column between the two frames.  What do you think this result means?  Have we found the _Beatles_?
+
+##### Left Join
+```{r}
+left_join(x,y)
+```
+
+##### Semi Join
+
+* semi_join(x, y) keeps all observations in x that have a match in y.
+* anti_join(x, y) drops all observations in x that have a match in y.
+
+```{r}
+semi_join(x,y)
+```
+
+##### Anti Join
+```{r}
+anti_join(x,y)
+```
+Hmm, not the _Beatles_.
+
+***
+### OK, what about order?
+
+Let's go back to our original data frame, _msleep_.  As a reminder, let's look at the structure of it again.
+```{r}
+str(msleep)
+```
+Now let's group_by vore, work out what percentage of the day is spent asleep, and take the median.
+```{r}
+msleep %>% 
+  group_by(vore) %>%
+    mutate(sleep_fraction = sleep_total/24.) %>%
+      summarize(med_sleep_frac = median(sleep_fraction))
+```
+OK, what happens if we do `mutate %>% group_by %>% summarise`?  Will it be the same in this case?
+```{r}
+msleep %>% 
+  mutate(sleep_fraction = sleep_total/24.) %>%
+    group_by(vore) %>%
+      summarize(med_sleep_frac = median(sleep_fraction))
+```
+Yes, *in this case* it is the same. This example also illustrates that `group_by` doesn't always be immediately followed by `summarize`.  
+
+Just in passing, if we drop the `summarize` here, we'll get across the entire data frame:
+```{r}
+msleep %>% 
+  mutate(sleep_fraction = sleep_total/24.) %>%
+      summarize(med_sleep_frac = median(sleep_fraction))
+```
+Let's try another data set (_iris_) and see if order matters:
+```{r}
+require(dplyr); 
+glimpse(iris)
+iris %>% 
+  mutate(max_sepal_length = max(Sepal.Length)) %>% 
+    group_by(Species) %>%
+      glimpse
+
+```
+with
+```{r}
+require(dplyr); 
+iris %>% 
+  group_by(Species) %>% 
+    mutate(max_sepal_length = max(Sepal.Length)) %>% 
+      glimpse
+```
+Notice the change in `max_sepal_length`. Which one is right?  Can you tell from the `glimpses` above compared to the following table and boxplot?  Hint: compare the maximum value for Setosa from below with the two queries above.
+```{r}
+table(iris$Species, iris$Sepal.Length)
+ boxplot(Sepal.Length~Species,data=iris,col='blue')
+```
+
+Let's look again at:
+```{r}
+test_output <- iris %>% 
+  mutate(max_sepal_length = max(Sepal.Length)) %>% 
+    group_by(Species) %>%
+      select(Species, max_sepal_length)
+summary(test_output)
+```
+
+By now it should it be clear what went wrong with the order, and the mistake "makes sense".
+
+Remember, you can `group_by` with more than one variable.  As Hadley says "summarise peels off a single layer of grouping".  It peels off grouping from the reverse order in which you applied it.  The following examples might help explain, using another standard test data set (_mtcars_).  We'll start with the structure of this cars dataset, before running the queries.
+```{r}
+str(mtcars)
+mtcars %>%
+ group_by(cyl, gear) %>%
+ summarise(newvar = sum(wt)) %>%
+ summarise(newvar2 = sum(newvar) + 5)
+```
+Note that this will give a different answer if you use `group_by(gear, cyl)` in the second line. Also note how `summarise` and `summarize` are equivalent.
+```{r}
+mtcars %>%
+ group_by(gear, cyl) %>%
+ summarise(newvar = sum(wt)) %>%
+ summarise(newvar2 = sum(newvar) + 5)
+```

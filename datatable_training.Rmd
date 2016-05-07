@@ -1,0 +1,292 @@
+---
+title: "An Introduction to data.table"
+author: "Timothy Banks"
+date: "6 May 2016"
+output: html_document
+---
+
+## Introduction
+
+This RMarkdown document is based on the vignettes for the _data.table_ library at CRAN
+(the Comprehensive R Archive Network).  It will allow you to run the _data.table_ queries in
+your RStudio environment, and give you a chance to tinker with the code.
+
+We'll first introduce the _data.table_ syntax, its general form, how to subset rows, select and
+compute on columns and perform aggregations by group. Familiarity with data.frame data structure
+from base R is useful, but not essential.
+
+We will use data from https://github.com/arunsrinivasan/flights/wiki/NYC-Flights-2014-data. 
+
+Click on the link and download the data files to the directory you will be working with R in.
+We will use the "flights14.csv" data. It contains on-time flights data from the Bureau of
+Transporation Statistics for all the flights that departed from New York City airports 
+for Jan-Oct 2014.
+
+###Loading the data
+
+First, make sure that you have _data.table_ installed on your machine.  Then we will use the "fast reader" `fread` to load up the CSV (comma separated variable) data file.  I've used the `glimpse`
+command from the _dplyr_ library as it is a nice, condensed way of looking at a data frame.
+```{r}
+require("data.table")
+flights <- fread("flights14.csv")
+```
+
+```{r echo=FALSE, error=FALSE, message=FALSE}
+require("dplyr", quietly = TRUE)
+```
+
+```{r}
+glimpse(flights)
+```
+
+### What is data.table?
+
+_data.table_ is an R package that provides an enhanced version of data.frames. Just now, we 
+created a data.table using fread(). We can also create one using the data.table() function. 
+Here is an example:
+
+```{r}
+DT = data.table(ID = c("b","b","b","a","a","c"), a = 1:6, b = 7:12, c=13:18)
+DT
+```
+
+Please note that:
+
+* Unlike data.frames, columns of character type are never converted to factors by default.
+* Row numbers are printed with a : in order to visually separate the row number from the first column.
+* When the number of rows to print exceeds the global option datatable.print.nrows (default = 100), it automatically prints only the top 5 and bottom 5 rows.
+* _data.table_ does not set or use row names.
+
+The general syntax for a _data.table_ command is: **DT[i, j, by]**. 
+The way to understand this is to read the command as: 
+
+* Take DT, 
+* subset rows using **i**, 
+* then calculate **j**, 
+* grouped by **by**.
+
+OK, let's try this out.
+
+### Subset rows in "i"
+Get all the flights with "JFK"" as the origin airport in the month of June.
+
+```{r}
+ans <- flights[origin == "JFK" & month == 6L]
+head(ans)
+```
+
+* Within the frame of a data.table, columns can be referred to as if they are variables. We can refer to 'dest' and 'month' as if they are variables. We do not need to add the prefix flights$ each time. However using 'flights\$dest' and 'flights\$month' would also work, it is just more typing.
+* The row indices that satisfies the condition origin `== "JFK" & month == 6L` are identified, and since there is nothing else left to do, _data.table_ simply returns all columns from flights corresponding to those row indices (or that condition, to put it another way)
+* A comma after the condition is also not required in i. But `flights[dest == "JFK" & month == 6L, ]` would work just fine. In data.frames however, the comma is necessary.
+
+OK, let's grab some rows:
+```{r}
+# Get the first two rows from flights.
+ans <- flights[1:2]
+ans
+```
+Hmm, that was easy.  Let's try something more complicated.  Let's sort flights first by the column "origin" in ascending order, and then by "dest" in descending order:
+```{r}
+ans <- flights[order(origin, -dest)]
+head(ans)
+```
+
+### Selecting columns using "j"
+
+We know how to select rows now, but how to select the columns. Let's select just the "arr_delay" column to start with:
+
+```{r}
+ans <- flights[, arr_delay]
+head(ans)
+```
+
+We got a vector back.  What if we wanted a data.table instead?  Well, we use `list`:
+
+```{r}
+ans <- flights[, list(arr_delay)]
+head(ans)
+```
+
+_data.table_ also allows using `.()` to wrap columns with. It is an alias to `list()`. They both mean the same thing. Feel free to use whichever you prefer.  We'll use `.()` from here on, just to save typing.  Let's try this out, selecting two columns:
+
+```{r}
+ans <- flights[, .(arr_delay, dep_delay)]
+head(ans)
+```
+
+Nice!  Let's get more complicated, because we've got this under control. Let's select both "arr\_delay" and "dep\_delay" columns and rename them to "delay\_arr" and "delay\_dep".
+
+```{r}
+ans <- flights[, .(delay_arr = arr_delay, delay_dep = dep_delay)]
+head(ans)
+```
+
+But we can also do things in the j step.
+ 
+####Compute or do in "j"
+
+How many trips have had total delay < 0?
+
+```{r}
+ans <- flights[, sum((arr_delay + dep_delay) < 0)]
+ans
+```
+
+We can use 'j' to not only select columns, but to do calculations on columns.  We just refer to the columns as variables, and then we can call functions on these variables.  That is exactly what we did above, adding up the delays in arrival and departure, by flight.
+
+###Subset in "i" and do in "j"
+
+Time to get more complicated.  Let's combine what we have learnt above.  We will
+calculate the average arrival and departure delay for all flights with "JFK"
+as the origin airport in the month of June.  With our new found powers, how hard can this be?
+
+```{r}
+ans <- flights[origin == "JFK" & month == 6L, 
+               .(m_arr=mean(arr_delay), m_dep=mean(dep_delay))]
+ans
+```
+
+Awesome! We first subset in i to find matching row indices where origin airport equals "JFK", 
+and month equals 6. At this point, we do not subset the entire data.table corresponding 
+to those rows. Now, we look at j and find that it uses only two columns. And what we 
+have to do is to compute their mean(). Therefore we subset just those columns corresponding 
+to the matching rows, and compute their mean().
+
+Now we are going to learn about `.N`.  What is this?  First, let's look at this query:
+```{r}
+ans <- flights[origin == "JFK" & month == 6L, length(dest)]
+ans
+```
+What is it doing?  
+
+It is telling us how many trips/flights left JFK in June.  8422, to be precise.
+
+But why the `length(dest)`?  Well, we want to know how many rows there are in the 
+output table.  We could use any column, but there must be something better, right?
+And you'd be right: `.N` is a special in-built variable that holds the number of 
+observations in the current group. It is particularly useful when combined with 
+"by". In the absence of group by operations, it simply returns the number of rows 
+in the subset.
+
+As we're keen on cutting down typing, looks like `.N` is the way to go.  Let's rewrite the 
+previous query using it:
+
+```{r}
+ans <- flights[origin == "JFK" & month == 6L, .N]
+ans
+```
+
+We see that "j" uses only `.N` and no other columns. Therefore the entire subset is not
+reported. We simply return the number of rows in the subset (which is just the 
+length of row indices).
+
+Note that we did not wrap `.N` with `list()` or `.()`. Therefore a vector is returned.
+
+### Grouping using "by"
+
+How can we get the number of trips corresponding to each origin airport?  You guessed it,
+time to learn about "by".
+
+```{r}
+ans <- flights[, .(.N), by=.(origin)]
+ans
+```
+
+We know `.N `is a special variable that holds the number of rows in the current group. Grouping by origin obtains the number of rows, `.N`, for each group.  Remember the `.()` notation is the same as `list()`, so if you hate seeing lots of dots (like `.(.N)`), then use `list(.N)`.
+
+Time to get more complicated.  How can we calculate the number of trips for each origin airport for carrier code "AA"? 
+
+```{r}
+ans <- flights[carrier == "AA", .N, by=origin]
+ans
+```
+Our _data.table_ super-powers are growing, so we take on a new challenge: How can we get the
+average arrival and departure delay for each orig,dest pair for each month for carrier code "AA"?
+
+```{r}
+ans <- flights[carrier == "AA", 
+        .(mean(arr_delay), mean(dep_delay)), 
+        by=.(origin, dest, month)]
+ans
+```
+
+Excellent, but there is one problem.  Note that the input order of grouping columns is preserved in the result. So if JFK is early in the input file, then we'll see it ahead of airports first seen later in the input file.  We don't like this.  We would like to order the result 
+by those grouping columns origin, dest and month.  How to do this?
+
+_data.table_ retaining the original order of groups is intentional and by design. There are cases when preserving the original order is essential. But at times we would like to automatically sort by the variables we grouped by.  We use `keyby` to solve this problem:
+
+```{r}
+ans <- flights[carrier == "AA", 
+        .(mean(arr_delay), mean(dep_delay)), 
+        keyby=.(origin, dest, month)]
+ans
+```
+
+Wow!  Can "by" accept expressions as well or just take columns? Yes it does. 
+As an example, if we would like to find out how many flights started late but 
+arrived early (or on time), started and arrived late, and so on:
+
+```{r}
+ans <- flights[, .N, .(dep_delay>0, arr_delay>0)]
+ans
+```
+
+### Multiple columns in "j" - .SD
+
+_data.table_ provides a special symbol, called `.SD`. It stands for **Subset of Data**. 
+It by itself is a data.table that holds the data for the current group defined using "by".
+OK, what does that mean?  Let's try a couple of queries to try to understand better:
+
+```{r}
+DT
+DT[, print(.SD), by=ID]
+```
+
+`.SD`  contains all the columns except the grouping columns by default. To compute on 
+(multiple) columns, we can then simply use the base R function lapply().
+
+```{r}
+DT[, lapply(.SD, mean), by=ID]
+```
+
+If you've forgotten about `lapply`, please take a look at the lecture notes from a few weeks earlier in the course. `.SD` holds the rows corresponding to columns a, b and c for that 
+group. We compute the `mean()` on each of these columns using the already familiar base 
+function `lapply()`. Each group returns a list of three elements containing the 
+mean value which will become the columns of the resulting data.table.
+Since `lapply()` returns a list, there is no need to wrap it with an additional `.()`.
+
+We are almost there. There is one little thing left to address. In our flights 
+data.table, we only wanted to calculate the `mean()` of two columns "arr\_delay" and 
+"dep\_delay". But `.SD` would contain **all** the columns other than the grouping 
+variables by default.
+
+Now what?  Well, `.SD_cols` to the rescue.   It accepts either column names or column indices. 
+For example, `.SDcols = c("arr_delay", "dep_delay")` ensures that `.SD` contains only 
+these two columns for each group.
+
+Say what?  Well, maybe the following example will help:
+
+```{r}
+flights[carrier == "AA",                     ## Only on trips with carrier "AA"
+        lapply(.SD, mean),                   ## compute the mean
+        by=.(origin, dest, month),           ## for every 'origin,dest,month'
+        .SDcols=c("arr_delay", "dep_delay")] ## for just those specified in .SDcols
+```
+
+### Final Comments
+
+You now have the basics of _data.table_.  There is lots more to learn, such as keys, 
+chaining, adding new columns, and more.  You'll learn this at the face to face
+workshop and by the end of it, the following will make sense for you.  You can also learn more
+at the documentation at CRAN for _data.table_.  If you do, you'll find the source material
+for this document!
+
+```{r}
+in_cols  = c("dep_delay", "arr_delay")
+out_cols = c("max_dep_delay", "max_arr_delay")
+flights[, c(out_cols) := lapply(.SD, max), by = month, .SDcols = in_cols]
+head(flights)
+```
+
+I hope this introduction has been helpful for you!
+
